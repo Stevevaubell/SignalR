@@ -150,7 +150,7 @@ namespace Microsoft.AspNet.SignalR.Tests
         }
 
         [Fact]
-        public async Task FarmDisconnectOnlyRaisesEventOnce()
+        public async Task FarmDisconnectOnlyRaisesUncleanDisconnects()
         {
             EnableTracing();
 
@@ -202,7 +202,8 @@ namespace Microsoft.AspNet.SignalR.Tests
 
                 await Task.Delay(TimeSpan.FromTicks(timeout.Ticks * nodes.Count));
 
-                Assert.Equal(1, nodes.Sum(n => n.Connection.DisconnectCount));
+                Assert.Equal(0, nodes.Sum(n => n.Connection.CleanDisconnectCount));
+                Assert.Equal(3, nodes.Sum(n => n.Connection.TotalDisconnectCount));
             }
         }
 
@@ -271,12 +272,21 @@ namespace Microsoft.AspNet.SignalR.Tests
 
         private class FarmConnection : PersistentConnection
         {
-            public int DisconnectCount { get; set; }
+            public int CleanDisconnectCount { get; set; }
+
+            public int TotalDisconnectCount { get; set; }
 
             protected override Task OnDisconnected(IRequest request, string connectionId)
             {
-                DisconnectCount++;
+                CleanDisconnectCount++;
                 return base.OnDisconnected(request, connectionId);
+            }
+
+            protected override Task OnDisconnected(IRequest request, string connectionId, bool hasTimedOut)
+            {
+                Assert.True(hasTimedOut);
+                TotalDisconnectCount++;
+                return base.OnDisconnected(request, connectionId, hasTimedOut);
             }
 
             protected override Task OnReceived(IRequest request, string connectionId, string data)
